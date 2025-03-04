@@ -1,1 +1,1 @@
-web: streamlit run medibot.py --server.port $8080
+web: streamlit run medibot.py 
