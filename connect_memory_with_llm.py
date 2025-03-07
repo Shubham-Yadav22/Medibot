@@ -64,5 +64,3 @@ combine_documents_chain = StuffDocumentsChain(
 # Now invoke with a single query
 user_query = input("Write Query Here: ")
 
-
-# print("SOURCE DOCUMENTS:", response["source_documents"])

@@ -9,12 +9,82 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain.chains.combine_documents.stuff import StuffDocumentsChain
+import sqlite3
+import hashlib
 
 # Set Hugging Face token
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
 # Path to FAISS vector store
 DB_FAISS_PATH = 'vectorstore/db_faiss'
+
+# SQLite Database Setup
+def init_db():
+    conn = sqlite3.connect('users.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    return conn
+
+# Hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Register a new user
+def register_user(conn, username, password):
+    c = conn.cursor()
+    password_hash = hash_password(password)
+    try:
+        c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, password_hash))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        st.error("Username already exists. Please choose a different username.")
+        return False
+
+# Authenticate a user
+def authenticate_user(conn, username, password):
+    c = conn.cursor()
+    password_hash = hash_password(password)
+    c.execute('SELECT * FROM users WHERE username = ? AND password_hash = ?', (username, password_hash))
+    user = c.fetchone()
+    return user is not None
+
+# User Authentication UI on the Main Page
+def auth_ui(conn):
+    st.title("User Authentication")
+    choice = st.radio("Choose an option", ["Login", "Sign Up"])
+
+    if choice == "Login":
+        st.subheader("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if authenticate_user(conn, username, password):
+                st.session_state['authenticated'] = True
+                st.session_state['username'] = username
+                st.success("Logged in successfully!")
+                st.rerun()  # Refresh the page to show the main app
+            else:
+                st.error("Invalid username or password.")
+
+    elif choice == "Sign Up":
+        st.subheader("Sign Up")
+        new_username = st.text_input("Choose a username")
+        new_password = st.text_input("Choose a password", type="password")
+        confirm_password = st.text_input("Confirm password", type="password")
+        if st.button("Sign Up"):
+            if new_password == confirm_password:
+                if register_user(conn, new_username, new_password):
+                    st.success("Account created successfully! Please log in.")
+            else:
+                st.error("Passwords do not match.")
 
 @st.cache_resource
 def get_vectorstore():
@@ -55,7 +125,7 @@ def summarize_text(text, llm):
     Summarize the given medical report in simple language. Focus on the following key points:
     - Patient symptoms
     - Diagnostic test results
-    - Diagnosis
+    - Diagnosis        
     - Treatment recommendations or next steps
 
     Keep the summary concise and under 300 words. Use bullet points for better readability.
@@ -81,11 +151,29 @@ def summarize_text(text, llm):
         st.error(f"Error generating summary: {e}")
         return ""
 
-
-
 def main():
+    # Initialize SQLite database
+    conn = init_db()
+
     # Set Streamlit UI
     st.set_page_config(page_title="Ask Chatbot", page_icon="🤖", layout="centered", initial_sidebar_state="auto")
+
+    # User Authentication
+    if 'authenticated' not in st.session_state:
+        st.session_state['authenticated'] = False
+
+    if not st.session_state['authenticated']:
+        auth_ui(conn)
+        st.stop()  # Stop further execution if the user is not authenticated
+
+    # Display username and logout button
+    st.write(f"Logged in as: **{st.session_state['username']}**")
+    if st.button("Logout"):
+        st.session_state['authenticated'] = False
+        st.session_state.pop('username', None)
+        st.rerun()  # Refresh the page to show the login screen
+
+    # Main App: Chatbot and PDF Upload
     st.title("Medibot : Get the Relevant Medical Info")
 
     # Chatbot UI
