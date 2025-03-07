@@ -22,3 +22,9 @@ or
 python -m streamlit run medibot.py
 ```
 
+
+
+### Env 
+
+In the env file we have the HF_TOKEN which lets us access the model mistralai/Mistral-7B-v3 , which we got from the HuggingFace.
+
