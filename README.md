@@ -9,6 +9,10 @@ This is an RAG (Retreival Augmented Generation) application which gets you the m
 To run this project :
 
 ```bash
+pip install -r requirements.txt
+```
+
+```bash
 streamlit run medibot.py
 ```
 
